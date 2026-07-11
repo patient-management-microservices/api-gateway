@@ -1,6 +1,23 @@
 server:
-  port: 4005
+  port: ${SERVER_PORT:4005}
 
 spring:
   application:
     name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: patient-service-route
+          uri: ${PATIENT_SERVICE_URL:http://patient-service:4000}
+          predicates:
+            - path=/api/patients/**
+          filters:
+            - strip-prefix=1
+
+        - id: api-docs-route
+          uri: ${PATIENT_SERVICE_URL:http://patient-service:4000}
+          predicates:
+            - path=/api-docs/patients
+          filters:
+            - rewrite-path=/api-docs/patients, /v3/api-docs
+
