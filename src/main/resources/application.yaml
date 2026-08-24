@@ -51,3 +51,31 @@ spring:
                 - Path=/api-docs/auth
               filters:
                 - RewritePath=/api-docs/auth, /v3/api-docs
+
+# ===== OBSERVABILITY =====
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://tempo:4318/v1/traces}
+
+logging:
+  pattern:
+    correlation: "[${spring.application.name:},%mdc{traceId:-},%mdc{spanId:-}]"
