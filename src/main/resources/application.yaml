@@ -1,6 +1,10 @@
 server:
   port: ${SERVER_PORT:4005}
 
+auth:
+  service:
+    url: ${AUTH_SERVICE_URL:http://auth-service:4004}
+
 spring:
   application:
     name: api-gateway
@@ -9,16 +13,69 @@ spring:
       server:
         webflux:
           routes:
+            # Auth routes WITHOUT JWT validation (login, register)
+            - id: auth-service-public-route
+              uri: ${AUTH_SERVICE_URL:http://auth-service:4004}
+              predicates:
+                - Path=/api/auth/login, /api/auth/register
+              filters:
+                - StripPrefix=2
+
+            # Auth routes WITH JWT validation (everything else)
+            - id: auth-service-protected-route
+              uri: ${AUTH_SERVICE_URL:http://auth-service:4004}
+              predicates:
+                - Path=/api/auth/**
+              filters:
+                - StripPrefix=2
+                - JwtValidation
+
             - id: patient-service-route
               uri: ${PATIENT_SERVICE_URL:http://patient-service:4000}
               predicates:
                 - Path=/api/patients/**
               filters:
                 - StripPrefix=1
+                - JwtValidation
 
-            - id: api-docs-route
+            - id: api-docs-patient-route
               uri: ${PATIENT_SERVICE_URL:http://patient-service:4000}
               predicates:
                 - Path=/api-docs/patients
               filters:
                 - RewritePath=/api-docs/patients, /v3/api-docs
+
+            - id: api-docs-auth-route
+              uri: ${AUTH_SERVICE_URL:http://auth-service:4004}
+              predicates:
+                - Path=/api-docs/auth
+              filters:
+                - RewritePath=/api-docs/auth, /v3/api-docs
+
+# ===== OBSERVABILITY =====
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://tempo:4318/v1/traces}
+
+logging:
+  pattern:
+    correlation: "[${spring.application.name:},%mdc{traceId:-},%mdc{spanId:-}]"
