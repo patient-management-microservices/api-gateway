@@ -7,26 +7,36 @@ on:
       - completed
 
 jobs:
-  deploy:
+  update-manifest:
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main'
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy API Gateway
+      - name: Checkout DevOps Repo
+        uses: actions/checkout@v4
+        with:
+          repository: patient-management-microservices/patient-management-devops
+          token: ${{ secrets.DEVOPS_PAT }}
+          ref: main
+
+      - name: Get short SHA
+        id: vars
         run: |
-          cd /home/dilshanjay/Apps/patient-management/patient-management-devops
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "sha_short=${SHA:0:7}" >> $GITHUB_OUTPUT
 
-          echo "Updating DevOps repository..."
-          git fetch origin
-          git reset --hard origin/main
+      - name: Update image tag in K8s manifest
+        run: |
+          sed -i "s|image: ghcr.io/patient-management-microservices/api-gateway:.*|image: ghcr.io/patient-management-microservices/api-gateway:sha-${{ steps.vars.outputs.sha_short }}|" \
+            k8s/services/api-gateway.yaml
 
-          echo "Pulling latest api-gateway image..."
-          docker compose pull api-gateway
-
-          echo "Restarting api-gateway..."
-          docker compose up -d api-gateway
-
-          echo "Deployment completed!"
+      - name: Commit and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/services/api-gateway.yaml
+          git diff --staged --quiet || git commit -m "chore: update api-gateway image to sha-${{ steps.vars.outputs.sha_short }} [skip ci]"
+          git push

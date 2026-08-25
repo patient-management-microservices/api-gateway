@@ -34,6 +34,10 @@ jobs:
           BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
+      - name: Set short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
         with:
@@ -41,4 +45,5 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.branch.outputs.branch }}
+            ghcr.io/${{ github.repository }}:sha-${{ steps.vars.outputs.sha_short }}
             ${{ github.ref == 'refs/heads/main' && format('ghcr.io/{0}:latest', github.repository) || '' }}
