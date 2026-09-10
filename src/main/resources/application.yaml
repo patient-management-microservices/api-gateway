@@ -1,9 +1,10 @@
 server:
   port: ${SERVER_PORT:4005}
 
-auth:
-  service:
-    url: ${AUTH_SERVICE_URL:http://auth-service:4004}
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:/etc/jwt-keys/public.pem}
+  issuer: ${JWT_ISSUER:auth-service}
+  audience: ${JWT_AUDIENCE:patient-management}
 
 spring:
   application:
@@ -13,15 +14,15 @@ spring:
       server:
         webflux:
           routes:
-            # Auth routes WITHOUT JWT validation (login, register)
+            # Auth routes WITHOUT JWT validation (login, register, refresh, logout)
             - id: auth-service-public-route
               uri: ${AUTH_SERVICE_URL:http://auth-service:4004}
               predicates:
-                - Path=/api/auth/login, /api/auth/register
+                - Path=/api/auth/login, /api/auth/register, /api/auth/refresh, /api/auth/logout
               filters:
                 - StripPrefix=2
 
-            # Auth routes WITH JWT validation (everything else)
+            # Auth routes WITH JWT validation (everything else under /api/auth/**)
             - id: auth-service-protected-route
               uri: ${AUTH_SERVICE_URL:http://auth-service:4004}
               predicates:
@@ -30,13 +31,37 @@ spring:
                 - StripPrefix=2
                 - JwtValidation
 
-            - id: patient-service-route
+            # Patient routes - read (any authenticated user)
+            - id: patient-service-read-route
               uri: ${PATIENT_SERVICE_URL:http://patient-service:4000}
               predicates:
                 - Path=/api/patients/**
+                - Method=GET
               filters:
                 - StripPrefix=1
                 - JwtValidation
+
+            # Patient routes - create and update (any authenticated user)
+            - id: patient-service-write-route
+              uri: ${PATIENT_SERVICE_URL:http://patient-service:4000}
+              predicates:
+                - Path=/api/patients/**
+                - Method=POST,PUT
+              filters:
+                - StripPrefix=1
+                - JwtValidation
+
+            # Patient routes - delete (ADMIN only)
+            - id: patient-service-admin-route
+              uri: ${PATIENT_SERVICE_URL:http://patient-service:4000}
+              predicates:
+                - Path=/api/patients/**
+                - Method=DELETE
+              filters:
+                - StripPrefix=1
+                - name: JwtValidation
+                  args:
+                    requiredRole: ADMIN
 
             - id: api-docs-patient-route
               uri: ${PATIENT_SERVICE_URL:http://patient-service:4000}
